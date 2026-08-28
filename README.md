@@ -85,7 +85,7 @@ A few of these checks lean on GitHub's own community profile API rather than gue
 ## Development
 
 ```bash
-git clone https://github.com/TheCEO3-rgb/repo-health-score.git
+git clone https://github.com/nulldql/repo-health-score.git
 cd repo-health-score
 npm install
 npm test
