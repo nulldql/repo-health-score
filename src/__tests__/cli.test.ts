@@ -112,9 +112,26 @@ const UNHEALTHY_REPO: RepoFixture = {
   issues: [],
 };
 
+function oldOpenIssue(number: number): Issue {
+  return {
+    number,
+    state: "open",
+    created_at: new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString(),
+    closed_at: null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+const MANY_STALE_ISSUES_REPO: RepoFixture = {
+  ...HEALTHY_REPO,
+  info: { ...HEALTHY_REPO.info, full_name: "octocat/many-stale-issues", open_issues_count: 150 },
+  issues: Array.from({ length: 150 }, (_, i) => oldOpenIssue(i + 1)),
+};
+
 const REPOS: Record<string, RepoFixture> = {
   "octocat/healthy": HEALTHY_REPO,
   "octocat/unhealthy": UNHEALTHY_REPO,
+  "octocat/many-stale-issues": MANY_STALE_ISSUES_REPO,
 };
 
 function startMockGitHub(): Promise<{ server: Server; baseUrl: string }> {
@@ -149,7 +166,12 @@ function startMockGitHub(): Promise<{ server: Server; baseUrl: string }> {
       if (rest.startsWith("actions/runs")) return send(200, fixture.runs);
       if (rest.startsWith("releases")) return send(200, fixture.releases);
       if (rest.startsWith("tags")) return send(200, []);
-      if (rest.startsWith("issues")) return send(200, fixture.issues);
+      if (rest.startsWith("issues")) {
+        const page = Number(url.searchParams.get("page") ?? "1");
+        const perPage = Number(url.searchParams.get("per_page") ?? "100");
+        const start = (page - 1) * perPage;
+        return send(200, fixture.issues.slice(start, start + perPage));
+      }
       if (rest === "contents/package.json") {
         return send(200, { content: packageJsonB64(), encoding: "base64" });
       }
@@ -238,6 +260,35 @@ test("cli --category limits the report to the requested categories", async () =>
     const parsed = JSON.parse(result.stdout);
     assert.equal(parsed.categories.length, 1);
     assert.equal(parsed.categories[0].name, "Tests");
+  } finally {
+    server.close();
+  }
+});
+
+test("cli gives a clear error for a --category typo instead of silently scoring nothing", async () => {
+  const { server, baseUrl } = await startMockGitHub();
+  try {
+    const result = await runCli(["octocat/healthy", "--json", "--category", "Tset"], baseUrl);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /unknown --category "Tset"/);
+    assert.match(result.stderr, /Tests/);
+  } finally {
+    server.close();
+  }
+});
+
+test("cli paginates through more than one page of issues instead of only seeing the first 100", async () => {
+  const { server, baseUrl } = await startMockGitHub();
+  try {
+    const result = await runCli(
+      ["octocat/many-stale-issues", "--json", "--category", "Issue Management"],
+      baseUrl,
+    );
+    const parsed = JSON.parse(result.stdout);
+    const finding = parsed.categories[0].findings.find((f: { label: string }) =>
+      f.label.includes("stale open issues"),
+    );
+    assert.match(finding.detail, /150\/150/);
   } finally {
     server.close();
   }

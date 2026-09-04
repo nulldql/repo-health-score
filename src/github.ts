@@ -129,6 +129,20 @@ export class GitHubClient implements GitHubClientLike {
     return (await response.json()) as T;
   }
 
+  private async getPaginated<T>(path: string, maxPages: number): Promise<T[]> {
+    const results: T[] = [];
+    const separator = path.includes("?") ? "&" : "?";
+
+    for (let page = 1; page <= maxPages; page++) {
+      const data = await this.get<T[]>(`${path}${separator}page=${page}`, true);
+      if (!data || data.length === 0) break;
+      results.push(...data);
+      if (data.length < 100) break;
+    }
+
+    return results;
+  }
+
   async getRepo(owner: string, repo: string): Promise<RepoInfo> {
     const data = await this.get<RepoInfo>(`/repos/${owner}/${repo}`);
     if (!data) throw new GitHubApiError(`Repository ${owner}/${repo} not found`, 404);
@@ -171,11 +185,11 @@ export class GitHubClient implements GitHubClientLike {
   }
 
   async getIssues(owner: string, repo: string): Promise<Issue[]> {
-    const data = await this.get<Issue[]>(
-      `/repos/${owner}/${repo}/issues?state=all&per_page=50&sort=updated`,
-      true,
+    const data = await this.getPaginated<Issue>(
+      `/repos/${owner}/${repo}/issues?state=all&per_page=100&sort=created&direction=asc`,
+      5,
     );
-    return (data ?? []).filter((issue) => !("pull_request" in issue) || !issue.pull_request);
+    return data.filter((issue) => !("pull_request" in issue) || !issue.pull_request);
   }
 
   async getFileContent(owner: string, repo: string, path: string): Promise<string | null> {

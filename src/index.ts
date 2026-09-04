@@ -47,6 +47,15 @@ async function main() {
       communityProfile,
     };
 
+    if (config.categories.length > 0) {
+      const knownNames = new Set(CHECKS.map((check) => check.name.toLowerCase()));
+      const unknown = config.categories.filter((name) => !knownNames.has(name.toLowerCase()));
+      if (unknown.length > 0) {
+        const validList = CHECKS.map((check) => check.name).join(", ");
+        throw new Error(`unknown --category "${unknown[0]}", valid categories are: ${validList}`);
+      }
+    }
+
     const checksToRun =
       config.categories.length === 0
         ? CHECKS

@@ -12,15 +12,15 @@ const MANIFESTS: Record<string, RegExp> = {
   "composer.json": /(^|\/)composer\.json$/i,
 };
 
-const LOCKFILES = [
-  /(^|\/)package-lock\.json$/i,
-  /(^|\/)yarn\.lock$/i,
-  /(^|\/)pnpm-lock\.yaml$/i,
-  /(^|\/)Gemfile\.lock$/i,
-  /(^|\/)go\.sum$/i,
-  /(^|\/)Cargo\.lock$/i,
-  /(^|\/)composer\.lock$/i,
-];
+const LOCKFILES_BY_MANIFEST: Record<string, RegExp[]> = {
+  "package.json": [/(^|\/)package-lock\.json$/i, /(^|\/)yarn\.lock$/i, /(^|\/)pnpm-lock\.yaml$/i],
+  "requirements.txt": [/(^|\/)Pipfile\.lock$/i, /(^|\/)poetry\.lock$/i],
+  "Gemfile": [/(^|\/)Gemfile\.lock$/i],
+  "go.mod": [/(^|\/)go\.sum$/i],
+  "Cargo.toml": [/(^|\/)Cargo\.lock$/i],
+  "pom.xml": [],
+  "composer.json": [/(^|\/)composer\.lock$/i],
+};
 
 const DEPENDENCY_BOT = [/(^|\/)\.github\/dependabot\.ya?ml$/i, /(^|\/)renovate\.json5?$/i, /(^|\/)\.renovaterc/i];
 
@@ -48,7 +48,8 @@ export const dependenciesCheck: Check = {
       return result(this.id, this.name, this.maxScore, findings);
     }
 
-    const hasLockfile = hasPath(ctx.tree, LOCKFILES);
+    const lockfilePatterns = LOCKFILES_BY_MANIFEST[manifestName] ?? [];
+    const hasLockfile = lockfilePatterns.length > 0 && hasPath(ctx.tree, lockfilePatterns);
     const hasBotConfig = hasPath(ctx.tree, DEPENDENCY_BOT);
 
     const findings: Finding[] = [

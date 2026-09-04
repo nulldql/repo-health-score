@@ -31,3 +31,24 @@ test("dependencies check flags missing automated update bot config", async () =>
   const finding = result.findings.find((f) => f.label.includes("automated dependency"));
   assert.equal(finding?.ok, false);
 });
+
+test("dependencies check doesn't count an unrelated ecosystem's lockfile as locking a python manifest", async () => {
+  const ctx = fakeContext({ tree: ["requirements.txt", "vendor/some-rust-tool/Cargo.lock"] });
+  const result = await dependenciesCheck.run(ctx);
+  const finding = result.findings.find((f) => f.label.includes("locked"));
+  assert.equal(finding?.ok, false);
+});
+
+test("dependencies check recognizes a real python lockfile for a python manifest", async () => {
+  const ctx = fakeContext({ tree: ["requirements.txt", "poetry.lock"] });
+  const result = await dependenciesCheck.run(ctx);
+  const finding = result.findings.find((f) => f.label.includes("locked"));
+  assert.equal(finding?.ok, true);
+});
+
+test("dependencies check doesn't count a go.sum as locking an npm manifest", async () => {
+  const ctx = fakeContext({ tree: ["package.json", "go.sum"] });
+  const result = await dependenciesCheck.run(ctx);
+  const finding = result.findings.find((f) => f.label.includes("locked"));
+  assert.equal(finding?.ok, false);
+});
