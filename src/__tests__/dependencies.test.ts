@@ -52,3 +52,11 @@ test("dependencies check doesn't count a go.sum as locking an npm manifest", asy
   const finding = result.findings.find((f) => f.label.includes("locked"));
   assert.equal(finding?.ok, false);
 });
+
+test("dependencies check treats pom.xml as not applicable for locking, since Maven has no common lockfile convention", async () => {
+  const ctx = fakeContext({ tree: ["pom.xml", ".github/dependabot.yml"] });
+  const result = await dependenciesCheck.run(ctx);
+  const finding = result.findings.find((f) => f.label.includes("locked"));
+  assert.equal(finding?.ok, true);
+  assert.equal(result.score, result.maxScore);
+});

@@ -186,7 +186,7 @@ export class GitHubClient implements GitHubClientLike {
 
   async getIssues(owner: string, repo: string): Promise<Issue[]> {
     const data = await this.getPaginated<Issue>(
-      `/repos/${owner}/${repo}/issues?state=all&per_page=100&sort=created&direction=asc`,
+      `/repos/${owner}/${repo}/issues?state=open&per_page=100&sort=created&direction=asc`,
       5,
     );
     return data.filter((issue) => !("pull_request" in issue) || !issue.pull_request);

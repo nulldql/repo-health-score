@@ -49,16 +49,19 @@ export const dependenciesCheck: Check = {
     }
 
     const lockfilePatterns = LOCKFILES_BY_MANIFEST[manifestName] ?? [];
-    const hasLockfile = lockfilePatterns.length > 0 && hasPath(ctx.tree, lockfilePatterns);
+    const noLockfileConvention = lockfilePatterns.length === 0;
+    const hasLockfile = !noLockfileConvention && hasPath(ctx.tree, lockfilePatterns);
     const hasBotConfig = hasPath(ctx.tree, DEPENDENCY_BOT);
 
     const findings: Finding[] = [
       {
-        ok: hasLockfile,
+        ok: noLockfileConvention || hasLockfile,
         label: "Dependencies are locked to exact versions",
-        detail: hasLockfile
-          ? "Found a lockfile alongside the manifest."
-          : `Found ${manifestName} but no matching lockfile.`,
+        detail: noLockfileConvention
+          ? `${manifestName} doesn't have a common lockfile convention this tool checks for, so this is skipped.`
+          : hasLockfile
+            ? "Found a lockfile alongside the manifest."
+            : `Found ${manifestName} but no matching lockfile.`,
       },
       {
         ok: hasBotConfig,

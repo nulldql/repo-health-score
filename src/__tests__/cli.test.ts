@@ -122,16 +122,36 @@ function oldOpenIssue(number: number): Issue {
   };
 }
 
+function ancientClosedIssue(number: number): Issue {
+  return {
+    number,
+    state: "closed",
+    created_at: new Date(Date.now() - 2000 * 24 * 60 * 60 * 1000).toISOString(),
+    closed_at: new Date(Date.now() - 1900 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 1900 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+}
+
 const MANY_STALE_ISSUES_REPO: RepoFixture = {
   ...HEALTHY_REPO,
   info: { ...HEALTHY_REPO.info, full_name: "octocat/many-stale-issues", open_issues_count: 150 },
   issues: Array.from({ length: 150 }, (_, i) => oldOpenIssue(i + 1)),
 };
 
+const OLD_CLOSED_HISTORY_REPO: RepoFixture = {
+  ...HEALTHY_REPO,
+  info: { ...HEALTHY_REPO.info, full_name: "octocat/old-closed-history", open_issues_count: 20 },
+  issues: [
+    ...Array.from({ length: 550 }, (_, i) => ancientClosedIssue(i + 1)),
+    ...Array.from({ length: 20 }, (_, i) => oldOpenIssue(551 + i)),
+  ],
+};
+
 const REPOS: Record<string, RepoFixture> = {
   "octocat/healthy": HEALTHY_REPO,
   "octocat/unhealthy": UNHEALTHY_REPO,
   "octocat/many-stale-issues": MANY_STALE_ISSUES_REPO,
+  "octocat/old-closed-history": OLD_CLOSED_HISTORY_REPO,
 };
 
 function startMockGitHub(): Promise<{ server: Server; baseUrl: string }> {
@@ -169,8 +189,11 @@ function startMockGitHub(): Promise<{ server: Server; baseUrl: string }> {
       if (rest.startsWith("issues")) {
         const page = Number(url.searchParams.get("page") ?? "1");
         const perPage = Number(url.searchParams.get("per_page") ?? "100");
+        const state = url.searchParams.get("state") ?? "open";
+        const matching =
+          state === "all" ? fixture.issues : fixture.issues.filter((issue) => issue.state === state);
         const start = (page - 1) * perPage;
-        return send(200, fixture.issues.slice(start, start + perPage));
+        return send(200, matching.slice(start, start + perPage));
       }
       if (rest === "contents/package.json") {
         return send(200, { content: packageJsonB64(), encoding: "base64" });
@@ -289,6 +312,23 @@ test("cli paginates through more than one page of issues instead of only seeing 
       f.label.includes("stale open issues"),
     );
     assert.match(finding.detail, /150\/150/);
+  } finally {
+    server.close();
+  }
+});
+
+test("cli doesn't let a large volume of old closed issues crowd open issues out of the paginated window", async () => {
+  const { server, baseUrl } = await startMockGitHub();
+  try {
+    const result = await runCli(
+      ["octocat/old-closed-history", "--json", "--category", "Issue Management"],
+      baseUrl,
+    );
+    const parsed = JSON.parse(result.stdout);
+    const finding = parsed.categories[0].findings.find((f: { label: string }) =>
+      f.label.includes("stale open issues"),
+    );
+    assert.match(finding.detail, /20\/20/);
   } finally {
     server.close();
   }
