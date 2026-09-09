@@ -138,6 +138,21 @@ const MANY_STALE_ISSUES_REPO: RepoFixture = {
   issues: Array.from({ length: 150 }, (_, i) => oldOpenIssue(i + 1)),
 };
 
+const CANCELLED_RUNS_REPO: RepoFixture = {
+  ...HEALTHY_REPO,
+  info: { ...HEALTHY_REPO.info, full_name: "octocat/cancelled-runs" },
+  runs: {
+    workflow_runs: [
+      { status: "completed", conclusion: "success", created_at: new Date().toISOString() },
+      { status: "completed", conclusion: "success", created_at: new Date().toISOString() },
+      { status: "completed", conclusion: "cancelled", created_at: new Date().toISOString() },
+      { status: "completed", conclusion: "cancelled", created_at: new Date().toISOString() },
+      { status: "completed", conclusion: "cancelled", created_at: new Date().toISOString() },
+      { status: "completed", conclusion: "skipped", created_at: new Date().toISOString() },
+    ],
+  },
+};
+
 const OLD_CLOSED_HISTORY_REPO: RepoFixture = {
   ...HEALTHY_REPO,
   info: { ...HEALTHY_REPO.info, full_name: "octocat/old-closed-history", open_issues_count: 20 },
@@ -152,6 +167,7 @@ const REPOS: Record<string, RepoFixture> = {
   "octocat/unhealthy": UNHEALTHY_REPO,
   "octocat/many-stale-issues": MANY_STALE_ISSUES_REPO,
   "octocat/old-closed-history": OLD_CLOSED_HISTORY_REPO,
+  "octocat/cancelled-runs": CANCELLED_RUNS_REPO,
 };
 
 function startMockGitHub(): Promise<{ server: Server; baseUrl: string }> {
@@ -329,6 +345,20 @@ test("cli doesn't let a large volume of old closed issues crowd open issues out 
       f.label.includes("stale open issues"),
     );
     assert.match(finding.detail, /20\/20/);
+  } finally {
+    server.close();
+  }
+});
+
+test("cli doesn't count cancelled or skipped workflow runs as CI failures", async () => {
+  const { server, baseUrl } = await startMockGitHub();
+  try {
+    const result = await runCli(
+      ["octocat/cancelled-runs", "--json", "--category", "Continuous Integration"],
+      baseUrl,
+    );
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.categories[0].score, parsed.categories[0].maxScore);
   } finally {
     server.close();
   }

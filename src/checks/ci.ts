@@ -19,7 +19,9 @@ export const ciCheck: Check = {
     const workflows = hasWorkflowFile ? await ctx.client.getWorkflows(ctx.owner, ctx.repo) : [];
     const runs = hasWorkflowFile ? await ctx.client.getWorkflowRuns(ctx.owner, ctx.repo) : [];
 
-    const completedRuns = runs.filter((r) => r.status === "completed");
+    const completedRuns = runs.filter(
+      (r) => r.status === "completed" && r.conclusion !== "cancelled" && r.conclusion !== "skipped",
+    );
     const successfulRuns = completedRuns.filter((r) => r.conclusion === "success");
     const successRate = completedRuns.length > 0 ? successfulRuns.length / completedRuns.length : null;
 
